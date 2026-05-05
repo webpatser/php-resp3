@@ -1,0 +1,149 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    name: PHP ${{ matrix.php }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: pecl, phpize
+          coverage: none
+
+      - name: phpize
+        run: phpize
+
+      - name: configure
+        run: ./configure --enable-resp3
+
+      - name: make
+        run: make
+
+      - name: make test
+        run: make test TESTS="--show-diff tests/"
+        env:
+          NO_INTERACTION: "1"
+          REPORT_EXIT_STATUS: "1"
+
+  alpine:
+    name: PHP 8.4 on Alpine 3.22 (musl)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: build & test inside Alpine container
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/src" -w /src alpine:3.22 sh -c '
+            apk add --no-cache php84 php84-dev gcc musl-dev make autoconf re2c bash >/dev/null
+            ln -sf /usr/bin/phpize84    /usr/local/bin/phpize
+            ln -sf /usr/bin/php-config84 /usr/local/bin/php-config
+            ln -sf /usr/bin/php84       /usr/local/bin/php
+            phpize
+            ./configure --enable-resp3
+            make
+            NO_INTERACTION=1 REPORT_EXIT_STATUS=1 make test TESTS="--show-diff tests/"
+          '
+
+  zts:
+    name: PHP ${{ matrix.php }} ZTS on ubuntu-24.04
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php }} ZTS
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: phpize
+          coverage: none
+        env:
+          phpts: ts
+
+      - name: verify ZTS build
+        run: php -i | grep "Thread Safety"
+
+      - name: phpize
+        run: phpize
+
+      - name: configure
+        run: ./configure --enable-resp3
+
+      - name: make
+        run: make
+
+      - name: make test
+        run: make test TESTS="--show-diff tests/"
+        env:
+          NO_INTERACTION: "1"
+          REPORT_EXIT_STATUS: "1"
+
+  composer-audit:
+    name: composer audit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: composer install
+        run: composer install --no-progress --ignore-platform-req=ext-resp3
+
+      - name: composer audit
+        run: composer audit --locked
+
+  valgrind:
+    name: Valgrind (PHP 8.4 on ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          tools: phpize
+          coverage: none
+
+      - name: install Valgrind
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq valgrind
+
+      - name: phpize + configure + make
+        run: phpize && ./configure --enable-resp3 && make
+
+      - name: make test under Valgrind (memcheck)
+        run: USE_ZEND_ALLOC=0 make test TESTS="-m tests/"
+        env:
+          NO_INTERACTION: "1"
+          REPORT_EXIT_STATUS: "1"
+
+  # PIE install smoke test deferred to a post-publish workflow.
+  # Path-repository install on a detached-HEAD CI checkout has known
+  # version-resolution edge cases (composer reports 9999999-dev, the
+  # cli constraint cannot satisfy that cleanly). The proper smoke test
+  # is `pie install webpatser/php-resp3` against Packagist after the
+  # tag is published, which planned for v0.1.1.

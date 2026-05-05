@@ -1,0 +1,44 @@
+{
+    "name": "webpatser/php-resp3",
+    "description": "PECL extension that parses RESP3 wire-protocol bytes into PHP values, plus PHP adapters for amphp/redis and Fledge.",
+    "type": "php-ext",
+    "license": "MIT",
+    "php-ext": {
+        "extension-name": "resp3",
+        "configure-options": [
+            {
+                "name": "enable-resp3",
+                "needs-value": false,
+                "description": "Enable the resp3 extension"
+            }
+        ]
+    },
+    "require": {
+        "php": "^8.4"
+    },
+    "require-dev": {
+        "amphp/redis": "^2.0",
+        "amphp/amp": "^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Resp3\\Adapter\\": "src/Adapter/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Resp3\\Bench\\": "bench/src/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "config": {
+        "sort-packages": true
+    },
+    "scripts": {
+        "smoke": [
+            "php -d extension=./modules/resp3.so examples/fledge_smoke.php",
+            "php -d extension=./modules/resp3.so examples/amphp_smoke.php"
+        ]
+    }
+}

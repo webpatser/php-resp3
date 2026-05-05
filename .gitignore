@@ -1,0 +1,64 @@
+# Build artifacts
+*.lo
+*.la
+*.o
+*.dep
+.libs/
+.deps/
+modules/
+
+# phpize / autotools generated files
+Makefile
+Makefile.fragments
+Makefile.global
+Makefile.objects
+acinclude.m4
+aclocal.m4
+autom4te.cache/
+build/
+config.guess
+config.h
+config.h.in
+config.h.in~
+config.log
+config.nice
+config.status
+config.sub
+configure
+configure.ac
+install-sh
+libtool
+ltmain.sh
+missing
+mkinstalldirs
+run-tests.php
+
+# phpt test output
+tests/*.diff
+tests/*.exp
+tests/*.log
+tests/*.mem
+tests/*.out
+tests/*.php
+tests/*.sh
+
+# Editor / sed / phpize / autotools backups
+*.bak
+*~
+
+# macOS
+.DS_Store
+
+# Local planning + Claude artefacts (not for upstream)
+PLAN.md
+CLAUDE.md
+.claude/
+
+# Composer
+vendor/
+composer.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
