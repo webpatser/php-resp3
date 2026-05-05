@@ -76,7 +76,13 @@ jobs:
           VERSION="${{ github.event.release.tag_name || inputs.release-tag }}"
           # Strip leading 'v' (release tags arrive as v0.1.1)
           VERSION="${VERSION#v}"
-          pie install "webpatser/php-resp3:${VERSION}"
+          # macOS GitHub runners have a user-writable extension dir; Linux
+          # runners need sudo to copy the .so into /usr/lib/php/...
+          if [ "${RUNNER_OS}" = "Linux" ]; then
+            sudo --preserve-env=PATH env "PATH=$PATH" pie install "webpatser/php-resp3:${VERSION}"
+          else
+            pie install "webpatser/php-resp3:${VERSION}"
+          fi
 
       - name: Verify extension loads and reports the right version
         run: |
