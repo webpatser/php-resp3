@@ -11,7 +11,8 @@
                 "needs-value": false,
                 "description": "Enable the resp3 extension"
             }
-        ]
+        ],
+        "download-url-method": ["pre-packaged-binary", "composer-default"]
     },
     "require": {
         "php": "^8.4"

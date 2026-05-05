@@ -5,6 +5,49 @@ All notable changes to this project go here. Format follows
 once the project hits 1.0; until then, breaking changes can land in any 0.x
 minor and are called out in the entry.
 
+## [0.1.1] - 2026-05-05
+
+### Added
+
+- Prebuilt PIE binaries for six common combos: PHP 8.4 + 8.5 on
+  linux/x86_64/glibc/NTS, linux/arm64/glibc/NTS, and darwin/arm64/NTS.
+  `pie install webpatser/php-resp3` now downloads the matching `.zip`
+  from the GitHub Release for these combos instead of compiling from
+  source. Other combos (Alpine/musl, ZTS, x86 32-bit, Windows) keep
+  using the source-compile fallback transparently.
+- `.github/workflows/release-binaries.yml`: triggered on
+  `release: published`. Runs `php/pie-ext-binary-builder@0.0.2`
+  across the six-row matrix, then a follow-up smoke matrix that
+  installs the package via `pie install webpatser/php-resp3:<ver>`
+  on Ubuntu and macOS to verify the prebuilt path resolves end-to-end
+  against Packagist before marking the release green.
+
+### Changed
+
+- `composer.json` `php-ext` block now declares
+  `download-url-method: ["pre-packaged-binary", "composer-default"]`
+  so PIE walks the prebuilt assets first and falls back to source
+  compile only on combos without a prebuilt asset.
+- README leads with `pie install webpatser/php-resp3`. The
+  Supported platforms section now splits into a Prebuilt-binaries
+  table (six combos) and a Source-compile fallback table (the
+  existing CI matrix).
+- ARCHITECTURE adds a Distribution section with the asset name
+  pattern, the prebuilt matrix, and the rationale for what is
+  intentionally not prebuilt.
+
+### Notes
+
+- Prebuilt assets carry the leading `v` from the release tag in
+  the filename (e.g. `php_resp3-v0.1.1_php8.4-x86_64-linux-glibc.zip`).
+  PIE strips the prefix when matching, so `pie install webpatser/php-resp3:0.1.1`
+  resolves correctly.
+- Linux smoke jobs invoke `sudo pie install` because the runner
+  extension dir is not user-writable. macOS GitHub runners are.
+  End users on Linux who do not have a passwordless sudo can also
+  use `pie install --allow-non-interactive-project-install` for a
+  per-project install, or run `sudo pie install` themselves.
+
 ## [0.1.0] - 2026-05-05
 
 First public release. The parser handles the full RESP3 wire type set
@@ -112,6 +155,7 @@ identical to the pure-PHP RespParsers in Fledge and amphp/redis via
 `bench/validate_01_structure_parity.php`; that contract will not
 break in a minor release.
 
+[0.1.1]: https://github.com/webpatser/php-resp3/releases/tag/v0.1.1
 [0.1.0]: https://github.com/webpatser/php-resp3/releases/tag/v0.1.0
 
 [kac]: https://keepachangelog.com/en/1.1.0/

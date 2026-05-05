@@ -224,6 +224,58 @@ The parser does its own bounds checking on every length-prefixed
 value. See `SECURITY.md` for the threat model and the test set under
 `tests/050_*.phpt` for the adversarial cases.
 
+## Distribution
+
+The package ships through PIE with a hybrid distribution model: prebuilt
+binaries when they match, source compile when they do not. `composer.json`
+declares this via the `php-ext` block:
+
+```json
+"php-ext": {
+    "extension-name": "resp3",
+    "configure-options": [...],
+    "download-url-method": ["pre-packaged-binary", "composer-default"]
+}
+```
+
+PIE walks that list in order: it first looks for a prebuilt asset on the
+GitHub Release that matches the user's PHP build, and only falls back to
+a source compile (`composer-default`) if no prebuilt matches.
+
+### Asset naming
+
+PIE matches assets by a fixed naming pattern:
+
+```
+php_resp3-{Version}_php{PhpVersion}-{Arch}-{OS}-{Libc}-{TSMode}.zip
+```
+
+The official `php/pie-ext-binary-builder` GitHub Action emits this name;
+the workflow under `.github/workflows/release-binaries.yml` runs the
+action on each tag-pushed release.
+
+### Prebuilt matrix
+
+| OS     | Arch    | Libc    | TSMode | PHP versions |
+| :----- | :------ | :------ | :----- | :----------- |
+| linux  | x86_64  | glibc   | nts    | 8.4, 8.5     |
+| linux  | arm64   | glibc   | nts    | 8.4, 8.5     |
+| darwin | arm64   | bsdlibc | nts    | 8.4, 8.5     |
+
+Six assets per release. ZTS builds, Alpine/musl, x86 (32-bit), and Windows
+DLLs are not prebuilt; PIE compiles those from source on the user's host.
+
+### Why this matrix
+
+The `php/pie-ext-binary-builder` action only supports `ubuntu-*` and
+`macos-*` GitHub-hosted runners. arm64 Linux works through the
+`ubuntu-24.04-arm` runner. Alpine/musl needs a custom container build
+that the action does not provide today; rather than maintain a parallel
+build pipeline, the source-compile fallback covers that case adequately.
+ZTS adoption is small enough that source compile is fine. Windows
+support requires a separate Windows-DLL pipeline (`php/php-windows-builder`)
+and is deferred until a Windows user asks.
+
 ## Scope and limitations
 
 Three things this parser deliberately does not handle.

@@ -17,13 +17,13 @@ management. You feed it bytes, you pull out parsed messages.
 ## Quickstart
 
 ```bash
-# Install with PIE (recommended)
 pie install webpatser/php-resp3
-
-# Or build from source
-git clone git@github.com:webpatser/php-resp3.git && cd php-resp3
-phpize && ./configure --enable-resp3 && make
 ```
+
+PIE downloads a prebuilt `.so` for your PHP build (PHP 8.4 or 8.5 on linux x86_64,
+linux arm64, or macOS arm64) in seconds. For other combos PIE falls back to a
+local source compile, which needs a C compiler, php-dev, and `re2c`. See
+[Build from source](#build-from-source) and [Supported platforms](#supported-platforms).
 
 Try it:
 
@@ -131,6 +131,22 @@ php -d extension=./modules/resp3.so -r 'echo resp3_version();'
 
 ## Supported platforms
 
+### Prebuilt binaries (instant `pie install`)
+
+| Combo                       | PHP versions |
+| :-------------------------- | :----------- |
+| linux / x86_64 / glibc, NTS | 8.4, 8.5     |
+| linux / arm64  / glibc, NTS | 8.4, 8.5     |
+| darwin / arm64, NTS         | 8.4, 8.5     |
+
+`pie install webpatser/php-resp3` downloads the right `.zip` from the
+GitHub Release for your PHP build; no compile needed for these six combos.
+
+### Source compile (PIE fallback)
+
+For any combo without a prebuilt asset, PIE falls back to a local source
+compile. CI verifies the build path on:
+
 | Build               | x64 | ARM64 | PHP versions |
 | :------------------ | :-: | :---: | :----------- |
 | Ubuntu 24.04 (NTS)  |  ✓  |   ✓   | 8.4, 8.5     |
@@ -138,9 +154,8 @@ php -d extension=./modules/resp3.so -r 'echo resp3_version();'
 | Alpine 3.22 (musl)  |  ✓  |  n/a  | 8.4          |
 | Ubuntu 24.04 (ZTS)  |  ✓  |  n/a  | 8.4, 8.5     |
 
-That works out to 9 build combinations plus a Valgrind memcheck run and
-a PIE install verification, all in parallel on GitHub Actions. PHP 8.6
-lands when it goes GA.
+That works out to 9 build combinations plus a Valgrind memcheck run, all
+in parallel on GitHub Actions. PHP 8.6 lands when it goes GA.
 
 ## Test fixtures
 

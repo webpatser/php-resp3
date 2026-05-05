@@ -1,0 +1,90 @@
+name: Release prebuilt binaries
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release-tag:
+        description: 'Release tag to build assets for (e.g. v0.1.1)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: PIE binary (PHP ${{ matrix.php }} on ${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            php: '8.4'
+          - runner: ubuntu-24.04
+            php: '8.5'
+          - runner: ubuntu-24.04-arm
+            php: '8.4'
+          - runner: ubuntu-24.04-arm
+            php: '8.5'
+          - runner: macos-15
+            php: '8.4'
+          - runner: macos-15
+            php: '8.5'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+
+      - name: Build and upload prebuilt PIE binary
+        uses: php/pie-ext-binary-builder@0.0.2
+        with:
+          release-tag: ${{ github.event.release.tag_name || inputs.release-tag }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          configure-flags: '--enable-resp3'
+
+  smoke:
+    name: pie install on ${{ matrix.runner }} (PHP ${{ matrix.php }})
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, macos-15]
+        php: ['8.4', '8.5']
+
+    steps:
+      - name: Setup PHP ${{ matrix.php }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: pie
+          coverage: none
+
+      - name: Allow Packagist a moment to sync after the release
+        if: github.event_name == 'release'
+        run: sleep 30
+
+      - name: pie install webpatser/php-resp3
+        run: |
+          VERSION="${{ github.event.release.tag_name || inputs.release-tag }}"
+          # Strip leading 'v' (release tags arrive as v0.1.1)
+          VERSION="${VERSION#v}"
+          # macOS GitHub runners have a user-writable extension dir; Linux
+          # runners need sudo to copy the .so into /usr/lib/php/...
+          if [ "${RUNNER_OS}" = "Linux" ]; then
+            sudo --preserve-env=PATH env "PATH=$PATH" pie install "webpatser/php-resp3:${VERSION}"
+          else
+            pie install "webpatser/php-resp3:${VERSION}"
+          fi
+
+      - name: Verify extension loads and reports the right version
+        run: |
+          php -m | grep -F resp3
+          php -r 'echo resp3_version() . PHP_EOL;'
