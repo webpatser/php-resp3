@@ -9,4 +9,4 @@ var_dump(resp3_version());
 ?>
 --EXPECT--
 bool(true)
-string(5) "0.1.0"
+string(9) "0.1.1-rc1"
