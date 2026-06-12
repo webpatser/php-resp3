@@ -467,7 +467,12 @@ resp3_parse_result_t resp3_parser_step(resp3_parser_t *p, char *err, size_t err_
 				 * commands such as "PING\r\n") is a server-to-client protocol
 				 * violation, not parser input we should try to interpret. */
 				static const char valid_types[] = "+-:$*_,#(!=%~|>";
-				if (strchr(valid_types, t) == NULL) {
+				/* Use memchr rather than strchr: strchr also matches the
+				 * string's terminating NUL, so a 0x00 type byte would
+				 * spuriously pass the whitelist. memchr bounds the search to
+				 * the literal type characters and rejects NUL like any other
+				 * unknown byte. */
+				if (memchr(valid_types, t, sizeof(valid_types) - 1) == NULL) {
 					snprintf(err, err_len,
 						"unknown RESP wire type 0x%02x; the parser handles "
 						"server-to-client RESP3 traffic, not inline commands "
