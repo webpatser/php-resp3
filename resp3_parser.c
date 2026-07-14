@@ -489,7 +489,9 @@ resp3_parse_result_t resp3_parser_step(resp3_parser_t *p, char *err, size_t err_
 				while (p->pos < len) {
 					char c = buf[p->pos];
 					if (c == '\r') {
-						if (p->int_digits == 0 && !p->int_neg) {
+						/* A lone '-' has int_neg set but no digits; it must not
+						 * reach finalize_length as -0 == 0. */
+						if (p->int_digits == 0) {
 							snprintf(err, err_len, "empty length");
 							return RESP3_PARSE_ERROR;
 						}
