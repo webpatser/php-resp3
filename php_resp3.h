@@ -12,7 +12,7 @@
 extern zend_module_entry resp3_module_entry;
 #define phpext_resp3_ptr &resp3_module_entry
 
-#define PHP_RESP3_VERSION "0.1.2"
+#define PHP_RESP3_VERSION "0.1.3"
 
 #if defined(ZTS) && defined(COMPILE_DL_RESP3)
 ZEND_TSRMLS_CACHE_EXTERN()

@@ -5,6 +5,16 @@ All notable changes to this project go here. Format follows
 once the project hits 1.0; until then, breaking changes can land in any 0.x
 minor and are called out in the entry.
 
+## [0.1.3] - 2026-07-14
+
+### Fixed
+
+- `tests/001_load.phpt` hardcoded the version string, so `make test` on
+  the v0.1.2 source tree reported one failure. The test now checks that
+  `resp3_version()` matches `phpversion('resp3')` and looks like a
+  semver triple, so release bumps no longer touch it. Test-only change;
+  the extension itself is identical to 0.1.2.
+
 ## [0.1.2] - 2026-07-14
 
 ### Fixed
@@ -176,6 +186,7 @@ identical to the pure-PHP RespParsers in Fledge and amphp/redis via
 `bench/validate_01_structure_parity.php`; that contract will not
 break in a minor release.
 
+[0.1.3]: https://github.com/webpatser/php-resp3/releases/tag/v0.1.3
 [0.1.2]: https://github.com/webpatser/php-resp3/releases/tag/v0.1.2
 [0.1.1]: https://github.com/webpatser/php-resp3/releases/tag/v0.1.1
 [0.1.0]: https://github.com/webpatser/php-resp3/releases/tag/v0.1.0
