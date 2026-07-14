@@ -5,6 +5,27 @@ All notable changes to this project go here. Format follows
 once the project hits 1.0; until then, breaking changes can land in any 0.x
 minor and are called out in the entry.
 
+## [0.1.2] - 2026-07-14
+
+### Fixed
+
+- A NUL (0x00) type byte is now rejected like any other unknown wire
+  byte. The type whitelist used `strchr`, which also matches a string's
+  terminating NUL, so 0x00 slipped past the check and reached the line
+  parser. The check now uses `memchr` bounded to the real type
+  characters.
+- A length field of just `-` (as in `$-\r\n` or `*-\r\n`) is now
+  rejected as an empty length. It used to finalize as -0 == 0 and was
+  delivered as an empty bulk string or empty array instead of raising
+  `Resp3\RedisException`. RESP2 null lengths (`$-1`, `*-1`) still parse
+  as null.
+
+### Changed
+
+- Test 068 now covers all invalid type bytes in one loop, including the
+  0x00 regression case, and asserts the error message names the
+  offending byte.
+
 ## [0.1.1] - 2026-05-05
 
 ### Added
@@ -155,6 +176,7 @@ identical to the pure-PHP RespParsers in Fledge and amphp/redis via
 `bench/validate_01_structure_parity.php`; that contract will not
 break in a minor release.
 
+[0.1.2]: https://github.com/webpatser/php-resp3/releases/tag/v0.1.2
 [0.1.1]: https://github.com/webpatser/php-resp3/releases/tag/v0.1.1
 [0.1.0]: https://github.com/webpatser/php-resp3/releases/tag/v0.1.0
 
