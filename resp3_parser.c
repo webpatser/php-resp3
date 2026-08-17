@@ -264,9 +264,14 @@ static int finalize_length(resp3_parser_t *p, char *err, size_t err_len)
 		case RESP3_TYPE_VERBATIM_STRING:
 		case RESP3_TYPE_BLOB_ERROR:
 			if (v < 0) {
-				/* RESP2 null bulk: $-1\r\n */
+				/* RESP2 null bulk: $-1\r\n. deliver_value only resets the
+				 * state at top level (depth 0); a null nested in an aggregate
+				 * must advance to the next element's type byte here, or the
+				 * machine re-enters LEN_LF and misreads that byte as a
+				 * missing LF. */
 				zval val;
 				ZVAL_NULL(&val);
+				p->state = RESP3_S_TYPE;
 				return deliver_value(p, &val, err, err_len);
 			}
 			if (v > p->max_bulk) {
@@ -282,9 +287,12 @@ static int finalize_length(resp3_parser_t *p, char *err, size_t err_len)
 		case RESP3_TYPE_SET:
 		case RESP3_TYPE_PUSH:
 			if (v < 0) {
-				/* RESP2 null array: *-1\r\n */
+				/* RESP2 null array: *-1\r\n. Same state reset as the null
+				 * bulk above: nested nulls must not leave the machine in
+				 * LEN_LF. */
 				zval val;
 				ZVAL_NULL(&val);
+				p->state = RESP3_S_TYPE;
 				return deliver_value(p, &val, err, err_len);
 			}
 			if (v > p->max_count) {

@@ -5,6 +5,20 @@ All notable changes to this project go here. Format follows
 once the project hits 1.0; until then, breaking changes can land in any 0.x
 minor and are called out in the entry.
 
+## [0.1.4] - 2026-08-17
+
+### Fixed
+
+- Nested RESP2 nulls (`$-1` / `*-1` as elements of an aggregate) corrupted
+  the state machine: `finalize_length` delivered the null but never reset
+  the state, so the parser re-entered `LEN_LF` and misread the next
+  element's type byte as a missing LF ("expected LF after CR in length").
+  Top-level nulls were unaffected because completion resets the state on
+  consumption. Seen live as the `XPENDING` summary reply
+  (`*4 :0 $-1 $-1 *-1`) and `MGET` with missing keys failing on every
+  RESP2 connection. Both null paths now advance to the next type byte
+  before delivering. New regression test: `tests/043_resp2_null_nested.phpt`.
+
 ## [0.1.3] - 2026-07-14
 
 ### Fixed
