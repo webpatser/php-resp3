@@ -149,6 +149,43 @@ instance instead of throwing. That way an array of mixed values can
 contain one or more errors without short-circuiting the whole batch.
 Userland code can route on `instanceof Resp3\RedisException`.
 
+## Wrap contract
+
+The state machine builds plain zvals. `php_resp3.h` declares
+`resp3_wrap_reply(char type, zval *val)`, implemented in `resp3.c`,
+which replaces the value in place:
+
+- `-` and `!` strings become `Resp3\RedisException` with a binary-safe
+  message and `prefix` set to the first `[A-Z0-9_]` token (or empty).
+- `=` strings become `Resp3\VerbatimString`.
+- A completed top-level `>` array becomes `Resp3\PushMessage`.
+
+`resp3_parser.c` calls it from `finalize_line` and `finalize_bulk`, so
+wrapping happens at any nesting depth. A nested `>` stays a plain array.
+`!-1` and `=-1` never reach the wrapper: they are protocol errors, like
+every negative length except `$-1` and `*-1`.
+
+## Push queue
+
+With `queuePushes: true` a completed top-level push is appended to a
+queue on the parser instead of becoming the current message. `next()`
+keeps returning regular replies only; `hasPush()` and `nextPush()` read
+the queue, oldest first. All three drive the state machine, so a push
+that is already buffered is found without a regular reply. `reset()`
+empties the queue.
+
+Pipelined consumers rely on this: replies stay aligned with commands
+even when an invalidation push lands between them.
+
+## Error latch
+
+A protocol error sets a latch on the parser. While it is set, `hasNext()` and `next()`
+throw `parser is in error state; call reset()` immediately, because
+`pos`, the frame stack and the line accumulator are left mid-message.
+`hasPush()` and `nextPush()` first hand out pushes queued before the
+fault and throw once the queue is empty. `feed()` and `reset()` never
+throw. `reset()` clears the latch along with all other state.
+
 ## RESP2 compatibility
 
 RESP3 is a strict superset of RESP2 from a parser perspective. The five
@@ -213,7 +250,8 @@ directly instead of going through the adapter.
 ### One-shot attributes
 
 `lastAttributes()` returns the attribute payload from the most recent
-`|` frame and immediately clears the slot. Reading twice returns
+`|` frame and immediately clears the slot. The parser also drops
+attributes when the next top-level message starts. Reading twice returns
 `null` the second time. This stops a stale attribute from a prior
 reply leaking into a later context. If you need the same attribute in
 two places, capture it in a local variable on the first read.
@@ -286,7 +324,7 @@ Three things this parser deliberately does not handle.
   friendly error so the direction mismatch is obvious.
 - **Streamed types**: `$?`, `*?`, `~?`, `%?` from the RESP3
   specification. Redis itself excludes them from its protocol
-  support and no command emits them today; deferred to v0.2.
+  support and no command emits them today; rejected as a non-digit in the length.
 - **Wire encoding**: the parser assumes valid CRLF (`\r\n`) line
   endings as the spec requires. It does not accept lone LF
   separators, even though some legacy tooling emits them.

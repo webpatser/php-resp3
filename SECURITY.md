@@ -45,19 +45,33 @@ Out of scope (open a regular issue instead):
 
 ## What we consider safe
 
-- The default caps (depth 100, bulk 512 MiB, aggregate 1M elements)
-  prevent a hostile server from exhausting host memory or wrapping
-  signed integers.
+- The caps (default depth 100, bulk 512 MiB, aggregate 1M elements)
+  are checked before any state changes, so a rejected header never
+  allocates. The depth ceiling of 10000 is a hard upper bound, not a
+  recommended value: ZTS builds with small thread stacks, or `var_dump`
+  of a very deep value, may want a lower `maxDepth` (the default stays
+  100).
+- The push queue holds at most `maxAggregateCount` pushes. When it is
+  full, the next push is a protocol error (`push queue limit exceeded;
+  drain with nextPush()`), so a consumer must drain after each reply.
+- Preallocation never trusts the header count: array and map storage
+  is reserved for at most 1024 slots up front (64 for nested aggregates) and grows only as
+  elements actually arrive. A 15 byte frame that claims a million
+  elements costs a few kilobytes, not megabytes.
+- Integers and doubles are parsed strictly and independent of the
+  locale: no whitespace, no leading `+`, no hex, no `infinity`.
+- A protocol error latches the parser. It refuses further input until
+  `reset()`, so it cannot resume in the middle of a malformed message.
 - Inline lines (`+`, `-`, `:`, `,`, `#`, `(`, `_`) are capped at 64
-  KiB regardless of the constructor settings.
+  KiB (`RESP3_MAX_INLINE_LINE`, 65536 bytes) regardless of the constructor settings.
 - Length values may not have more than 19 decimal digits, which keeps
   the multiply-add accumulator inside `int64_t`.
 - The verbatim string type prefix is restricted to three ASCII
   alphanumeric characters; everything else falls back to an empty
   type with the full payload in `value`.
 
-The `tests/050_*.phpt` through `tests/057_*.phpt` set covers each of
-these guards, and CI runs the full suite under Valgrind on Ubuntu.
+The `tests/050_*.phpt` through `tests/057_*.phpt` set, together with
+`tests/058`, `059`, `071`, `072` and `077`, covers each of these guards, and CI runs the full suite under Valgrind on Ubuntu.
 
 ## Hall of fame
 

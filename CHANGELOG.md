@@ -5,6 +5,81 @@ All notable changes to this project go here. Format follows
 once the project hits 1.0; until then, breaking changes can land in any 0.x
 minor and are called out in the entry.
 
+## [0.2.0] - 2026-10-03
+
+### Added
+
+- Push queue API. `new Resp3\Parser(queuePushes: true)` diverts top-level
+  push frames (`>`) into a queue. Read them with `hasPush()` and
+  `nextPush(): ?PushMessage`, so a consumer reading N pipelined replies
+  no longer misaligns when an invalidation push arrives in between.
+  Default mode is unchanged: pushes still come out of `next()` as
+  `Resp3\PushMessage`.
+- `Resp3\RedisException::$prefix`: the first `[A-Z0-9_]` token of the
+  server error (`ERR`, `WRONGTYPE`, `MOVED`, `NOAUTH`), or an empty
+  string when there is none. Parser faults use `PROTOCOL`.
+- `-nan` is accepted as a double, next to `nan`, `inf` and `-inf`.
+- Bulk fast path: when the whole payload is already buffered, the string
+  is built straight from the buffer without the intermediate copies.
+
+### Changed
+
+- Nested errors (`-`, `!`) and verbatim strings (`=`) are wrapped at any
+  depth, for example inside `EXEC` results. Before, only top-level ones
+  became `Resp3\RedisException` and `Resp3\VerbatimString`.
+- A null bulk error `!-1` or null verbatim `=-1` is now a protocol error
+  instead of an exception with an empty message.
+- Protocol errors latch. After a parse error `hasNext()` and `next()` throw
+  `parser is in error state; call reset()` until you call `reset()`.
+  `feed()` and `reset()` never throw. `hasPush()` and `nextPush()` first
+  hand out pushes queued before the fault, then throw once the queue
+  is empty.
+- `next()` on a parser with no message throws `LogicException` instead
+  of `Resp3\RedisException`, so misuse no longer looks like a wire fault.
+- The `maxDepth` ceiling drops from 100000 to 10000.
+- Calling `__construct()` again on an existing parser discards its
+  state instead of throwing.
+- Only `$-1` and `*-1` are null (RESP2 compatibility). `~-1`, `>-1`,
+  `%-1`, `|-1`, `-0` and lengths with leading zeros are protocol
+  errors. Before, negative lengths on `$`, `*`, `~`, `>`, `!` and `=`
+  read as null (`%-1` and `|-1` were already rejected in 0.1.4).
+- Nested error replies now construct exception objects, and each one
+  captures a backtrace, so an `EXEC` with many failed commands costs
+  more than before. This is a conscious trade for correctness.
+- The push queue holds at most `maxAggregateCount` pushes; the next one
+  is a protocol error (`push queue limit exceeded; drain with
+  nextPush()`).
+- Map keys use symtable semantics: numeric strings such as `"123"` become
+  the integer key `123`, so `$map[123]` and `$map["123"]` both hit.
+  Aggregate map keys are rejected instead of being cast to a string with
+  an "Array to string conversion" warning.
+- Attributes are cleared when the next top-level message starts, so
+  `lastAttributes()` can no longer return attributes from an earlier reply.
+- `composer.json` no longer sets `minimum-stability`, and `amphp/redis`
+  was added to `suggest`; it stays in `require-dev` for the adapter
+  tests.
+- `AmpRedisConnection` also catches `Resp3\RedisException` in its read
+  loop and resets the parser on a `PROTOCOL` fault.
+
+### Fixed
+
+- Allocation amplification: the unverified header count no longer drives
+  `array_init_size`. The preallocation hint is capped at 1024 slots for
+  a top-level aggregate and 64 for nested ones, so `*1000000\r\n:1\r\n` no longer pins megabytes.
+- Integer and double parsing is strict and locale independent. Whitespace,
+  a leading `+`, hex and `infinity` are rejected.
+- Error messages with an embedded NUL byte are no longer truncated.
+- Reflection cannot skip the constructor (final internal class) and the
+  class is not serializable, so a Parser without caps can no longer exist.
+
+### Security
+
+- Closes the count-driven preallocation class of bug, the same class as
+  the hiredis multibulk preallocation issue. No CVE is claimed for this
+  project; no release before 0.2.0 shipped a known exploit.
+- Lowering the `maxDepth` ceiling to 10000 keeps recursive destruction of
+  deeply nested arrays inside the C stack.
+
 ## [0.1.4] - 2026-08-17
 
 ### Fixed

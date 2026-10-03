@@ -11,6 +11,7 @@ use Amp\Redis\Connection\RedisConnectionException;
 use Amp\Redis\Protocol\RedisResponse;
 use Amp\Redis\RedisException;
 use Amp\Socket\Socket;
+use Resp3\RedisException as Resp3RedisException;
 use Revolt\EventLoop;
 
 /**
@@ -46,7 +47,12 @@ final class AmpRedisConnection implements RedisConnection
 
                 $parser->cancel();
                 $queue->complete();
-            } catch (RedisException $e) {
+            } catch (RedisException | Resp3RedisException $e) {
+                if ($e instanceof Resp3RedisException && $e->prefix === 'PROTOCOL') {
+                    // A protocol fault latches the parser; reset it before the connection closes.
+                    $parser->cancel();
+                }
+
                 $queue->error($e);
             }
 

@@ -69,7 +69,7 @@ helps and where it does not.
 ## Userland API
 
 ```php
-$p = new Resp3\Parser($maxDepth = 100);
+$p = new Resp3\Parser($maxDepth = 100);   // also: $maxBulk, $maxAggregateCount, $queuePushes
 
 $p->feed($bytes);                  // append bytes (no parse work)
 while ($p->hasNext()) {            // drive the state machine; throws on protocol error
@@ -81,9 +81,85 @@ $attr = $p->lastAttributes();      // attributes (`|`) attached to the last valu
 $p->reset();                       // wipe state and start fresh
 ```
 
+| Method                                                           | Purpose                                                     |
+| :--------------------------------------------------------------- | :---------------------------------------------------------- |
+| `new Parser(int $maxDepth = 100, int $maxBulk = 536870912, int $maxAggregateCount = 1000000, bool $queuePushes = false)` | Create a parser; `queuePushes` diverts push frames |
+| `feed(string $bytes): void`                                      | Append bytes, no parse work                                 |
+| `hasNext(): bool`                                                | Drive the state machine; true when a message is ready       |
+| `next(): mixed`                                                  | Return the buffered message                                 |
+| `hasPush(): bool`                                                | True when a push message is queued (queue mode only)        |
+| `nextPush(): ?PushMessage`                                       | Remove and return the oldest queued push, or `null`         |
+| `lastAttributes(): ?array`                                       | Attributes of the last value, read once                     |
+| `reset(): void`                                                  | Wipe all state, clear an error latch                        |
+
 Splitting `hasNext()` and `next()` keeps "need more bytes" out of the return
 value. That matters: every PHP scalar (`null`, `false`, `0`, `""`) is a real
 RESP3 wire value, and you don't want any of them stolen as a sentinel.
+
+## Push messages
+
+Redis sends push frames (`>`) out of band: client tracking invalidations
+and pubsub messages can arrive between two replies on the same
+connection. If you pipeline N commands and read N replies with
+`next()`, a push in the middle is returned in place of a reply and every
+later reply lands one slot off.
+
+Queue mode keeps replies and pushes apart:
+
+```php
+$p = new Resp3\Parser(queuePushes: true);
+
+$p->feed($bytes);
+while ($p->hasNext()) {
+    $reply = $p->next();           // regular replies only
+}
+while ($p->hasPush()) {
+    $push = $p->nextPush();        // Resp3\PushMessage, oldest first
+}
+```
+
+The queue holds at most `maxAggregateCount` pushes. When it is full, the
+next push is a protocol error (`push queue limit exceeded; drain with
+nextPush()`), so drain with `hasPush()` and `nextPush()` after each reply.
+
+In default mode (`queuePushes: false`) pushes are returned from `next()`
+as `Resp3\PushMessage`, as before. Nested `>` frames are never queued;
+they stay plain arrays inside their parent.
+
+## Error handling
+
+Server errors (`-` and `!`) are returned, not thrown, as
+`Resp3\RedisException`. They are wrapped at any depth, so an error inside
+an `EXEC` result is an exception object in the result array.
+
+`Resp3\RedisException::$prefix` holds the leading uppercase token of the
+message, for example `ERR`, `WRONGTYPE`, `MOVED`, `ASK` or `NOAUTH`. It
+is an empty string when the message has no such token. Route on
+`$prefix` instead of string matching the message.
+
+Malformed wire bytes throw `Resp3\RedisException` with `$prefix` set to
+`PROTOCOL`. The parser then latches: `hasNext()` and `next()` throw
+`parser is in error state; call reset()` until you call `reset()`.
+`feed()` and `reset()` never throw. `hasPush()` and `nextPush()` first
+hand out pushes queued before the fault, then throw once the queue is
+empty.
+
+```php
+try {
+    while ($p->hasNext()) {
+        handle($p->next());
+    }
+} catch (Resp3\RedisException $e) {
+    if ($e->prefix === 'PROTOCOL') {
+        $p->reset();               // drop the connection too
+    }
+}
+```
+
+Calling `next()` when no message is available throws `LogicException`.
+
+Only `$-1` and `*-1` are null lengths (RESP2 compatibility). `~-1`, `>-1`,
+`%-1`, `|-1`, `!-1`, `=-1`, `-0` and lengths with leading zeros are protocol errors.
 
 ## Type mapping
 
@@ -206,7 +282,7 @@ adversarial input, all configurable on the constructor:
 
 ```php
 $p = new Resp3\Parser(
-    maxDepth: 100,                  // aggregate nesting (default 100, max 100000)
+    maxDepth: 100,                  // aggregate nesting (default 100, max 10000)
     maxBulk: 536_870_912,           // bytes per bulk string (default 512 MiB, max 2 GiB)
     maxAggregateCount: 1_000_000,   // elements per array/set/push (or pairs for map)
 );
@@ -231,7 +307,7 @@ Two userland gotchas that are not parser bugs but matter for security:
   a later context.
 
 Calling `__construct()` a second time on an existing `Resp3\Parser`
-throws `ValueError`. Use `reset()` to recycle an instance.
+discards its state. Use `reset()` to recycle an instance.
 
 The `tests/050_*.phpt` through `tests/057_*.phpt` set covers each of
 these guards. CI runs the full suite under Valgrind on Ubuntu (see the
@@ -243,12 +319,12 @@ A few RESP corners that this version does not handle. None of them
 trip a real Redis or Valkey server in 2026; if your workload hits one
 anyway, open an issue.
 
-- **Streamed types** (`$?`, `*?`, `~?`, `%?`). The RESP3 specification
+- Streamed types (`$?`, `*?`, `~?`, `%?`). The RESP3 specification
   defines streamed bulk strings, arrays, sets, and maps with chunk
   framing and end markers, but Redis itself excludes them from its
   shipped protocol support and no server command emits them today.
-  Planned for v0.2 if a real workload needs them.
-- **Inline commands** (`PING\r\n` style telnet input). The spec lists
+  The parser rejects the `?` length marker as a non-digit in the length.
+- Inline commands (`PING\r\n` style telnet input). The spec lists
   this as a client-to-server fallback only. The parser sits on the
   server-to-client side and rejects an unknown first byte with a
   clear message that points at the direction mismatch.
