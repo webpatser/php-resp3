@@ -1,6 +1,6 @@
 /*
   +----------------------------------------------------------------------+
-  | php-resp3 — RESP3 wire-protocol parser                               |
+  | php-resp3: RESP3 wire-protocol parser                                |
   +----------------------------------------------------------------------+
   | Author: Christoph Kempen <christoph@downsized.nl>                    |
   +----------------------------------------------------------------------+
@@ -45,7 +45,10 @@ static zend_object *resp3_parser_create(zend_class_entry *ce)
 	object_properties_init(&intern->std, ce);
 	intern->std.handlers = &resp3_parser_object_handlers;
 
-	/* parser fields zeroed by zend_object_alloc; explicit init happens in __construct */
+	/* Initialise with the default caps so an instance created without running
+	 * __construct (reflection, newInstanceWithoutConstructor) is still usable. */
+	resp3_parser_init(&intern->parser, RESP3_DEFAULT_MAX_DEPTH,
+		RESP3_DEFAULT_MAX_BULK, RESP3_DEFAULT_MAX_COUNT, 0);
 	return &intern->std;
 }
 
@@ -56,6 +59,124 @@ static void resp3_parser_free(zend_object *obj)
 	zend_object_std_dtor(&intern->std);
 }
 
+/* Redis error prefix: the leading token when it is all [A-Z0-9_] and ends at
+ * a space or at the end of the message ("ERR", "WRONGTYPE", "MOVED"), else "". */
+static zend_string *resp3_error_prefix(const zend_string *msg)
+{
+	const char *raw = ZSTR_VAL(msg);
+	size_t      len = ZSTR_LEN(msg);
+	size_t      i   = 0;
+
+	while (i < len && raw[i] != ' ') {
+		unsigned char c = (unsigned char) raw[i];
+		if (!((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_')) {
+			return ZSTR_EMPTY_ALLOC();
+		}
+		i++;
+	}
+	if (i == 0) {
+		return ZSTR_EMPTY_ALLOC();
+	}
+	return zend_string_init(raw, i, 0);
+}
+
+/* Build a Resp3\RedisException with a binary-safe message and the given prefix.
+ * Neither string is consumed. */
+static void resp3_make_redis_exception(zval *out, zend_string *message, zend_string *prefix)
+{
+	object_init_ex(out, resp3_redis_exception_ce);
+	zend_update_property_str(resp3_redis_exception_ce, Z_OBJ_P(out),
+		"message", sizeof("message") - 1, message);
+	zend_update_property_str(resp3_redis_exception_ce, Z_OBJ_P(out),
+		"prefix", sizeof("prefix") - 1, prefix);
+}
+
+/* Throw a parser fault as Resp3\RedisException with prefix "PROTOCOL". */
+static void resp3_throw_protocol_error(const char *err)
+{
+	zval ex;
+	zend_string *message = zend_strpprintf(0, "RESP3 parse error: %s", err);
+	zend_string *prefix  = zend_string_init("PROTOCOL", sizeof("PROTOCOL") - 1, 0);
+
+	resp3_make_redis_exception(&ex, message, prefix);
+	zend_string_release(message);
+	zend_string_release(prefix);
+	zend_throw_exception_object(&ex);
+}
+
+/* Contract with resp3_parser.c: replace *val in place with its userland
+ * wrapper. `-`/`!` strings become Resp3\RedisException, `=` strings become
+ * Resp3\VerbatimString, `>` arrays become Resp3\PushMessage. Anything else
+ * is left untouched. `!-1` and `=-1` are protocol errors in the parser and
+ * never reach this function; only `$-1` and `*-1` are null.
+ */
+void resp3_wrap_reply(char type, zval *val)
+{
+	zval wrapped;
+
+	if ((type == '-' || type == '!') && Z_TYPE_P(val) == IS_STRING) {
+		zend_string *prefix = resp3_error_prefix(Z_STR_P(val));
+
+		resp3_make_redis_exception(&wrapped, Z_STR_P(val), prefix);
+		zend_string_release(prefix);
+		zval_ptr_dtor(val);
+		ZVAL_COPY_VALUE(val, &wrapped);
+		return;
+	}
+
+	/* Verbatim string: split "xxx:payload" into type + value and wrap.
+	 * The wire format is `=<len>\r\n<3-char prefix>:<payload>\r\n`. The type
+	 * prefix is server-supplied untrusted input; only 3 ASCII alnum chars are
+	 * accepted. Anything else falls back to type="" with the full payload in
+	 * value so consumers still see the bytes without trusting them as a tag. */
+	if (type == '=' && Z_TYPE_P(val) == IS_STRING) {
+		zend_string *s   = Z_STR_P(val);
+		const char  *raw = ZSTR_VAL(s);
+		size_t       len = ZSTR_LEN(s);
+
+		bool valid_prefix = (len >= 4 && raw[3] == ':');
+		if (valid_prefix) {
+			for (int i = 0; i < 3; i++) {
+				unsigned char c = (unsigned char) raw[i];
+				if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))) {
+					valid_prefix = false;
+					break;
+				}
+			}
+		}
+
+		zend_string *type_s = valid_prefix
+			? zend_string_init(raw, 3, 0)
+			: ZSTR_EMPTY_ALLOC();
+		zend_string *value_s = valid_prefix
+			? zend_string_init(raw + 4, len - 4, 0)
+			: zend_string_copy(s);
+
+		object_init_ex(&wrapped, resp3_verbatim_string_ce);
+		zend_update_property_str(resp3_verbatim_string_ce, Z_OBJ(wrapped),
+			"type", sizeof("type") - 1, type_s);
+		zend_update_property_str(resp3_verbatim_string_ce, Z_OBJ(wrapped),
+			"value", sizeof("value") - 1, value_s);
+
+		zend_string_release(type_s);
+		zend_string_release(value_s);
+		zval_ptr_dtor(val);
+		ZVAL_COPY_VALUE(val, &wrapped);
+		return;
+	}
+
+	/* Push: wrap the array payload so consumers can route on instanceof.
+	 * zend_update_property adds its own reference, so the old zval is
+	 * released afterwards. */
+	if (type == '>' && Z_TYPE_P(val) == IS_ARRAY) {
+		object_init_ex(&wrapped, resp3_push_message_ce);
+		zend_update_property(resp3_push_message_ce, Z_OBJ(wrapped),
+			"payload", sizeof("payload") - 1, val);
+		zval_ptr_dtor(val);
+		ZVAL_COPY_VALUE(val, &wrapped);
+	}
+}
+
 PHP_FUNCTION(resp3_version)
 {
 	ZEND_PARSE_PARAMETERS_NONE();
@@ -64,20 +185,24 @@ PHP_FUNCTION(resp3_version)
 
 PHP_METHOD(Resp3_Parser, __construct)
 {
-	zend_long max_depth = 100;
-	zend_long max_bulk  = (zend_long) RESP3_DEFAULT_MAX_BULK;
-	zend_long max_count = (zend_long) RESP3_DEFAULT_MAX_COUNT;
+	zend_long max_depth    = RESP3_DEFAULT_MAX_DEPTH;
+	zend_long max_bulk     = (zend_long) RESP3_DEFAULT_MAX_BULK;
+	zend_long max_count    = (zend_long) RESP3_DEFAULT_MAX_COUNT;
+	bool      queue_pushes = false;
 
-	ZEND_PARSE_PARAMETERS_START(0, 3)
+	ZEND_PARSE_PARAMETERS_START(0, 4)
 		Z_PARAM_OPTIONAL
 		Z_PARAM_LONG(max_depth)
 		Z_PARAM_LONG(max_bulk)
 		Z_PARAM_LONG(max_count)
+		Z_PARAM_BOOL(queue_pushes)
 	ZEND_PARSE_PARAMETERS_END();
 
-	if (max_depth < 1 || max_depth > 100000) {
+	/* Recursive zval destruction of a very deep reply can exhaust the C stack,
+	 * so depth is capped well below that point. */
+	if (max_depth < 1 || max_depth > RESP3_MAX_DEPTH_CEILING) {
 		zend_throw_exception_ex(zend_ce_value_error, 0,
-			"maxDepth must be between 1 and 100000");
+			"maxDepth must be between 1 and %d", RESP3_MAX_DEPTH_CEILING);
 		RETURN_THROWS();
 	}
 	if (max_bulk < 1 || max_bulk > ((zend_long) 2) * 1024 * 1024 * 1024) {
@@ -93,15 +218,11 @@ PHP_METHOD(Resp3_Parser, __construct)
 
 	resp3_parser_object *intern = Z_RESP3_PARSER_P(ZEND_THIS);
 
-	/* Re-entrancy guard: re-calling __construct on an already-initialised parser
-	 * would leak the previous buf/line_acc/stack/attributes. Reject explicitly. */
-	if (intern->parser.buf.s != NULL) {
-		zend_throw_exception_ex(zend_ce_value_error, 0,
-			"Resp3\\Parser is already constructed; create a new instance or call reset()");
-		RETURN_THROWS();
-	}
-
-	resp3_parser_init(&intern->parser, (size_t) max_depth, (int64_t) max_bulk, (int64_t) max_count);
+	/* create_object already initialised the parser with defaults. Calling
+	 * __construct (again) discards any state and applies the given caps. */
+	resp3_parser_dtor(&intern->parser);
+	resp3_parser_init(&intern->parser, (size_t) max_depth, (int64_t) max_bulk,
+		(int64_t) max_count, queue_pushes ? 1 : 0);
 }
 
 PHP_METHOD(Resp3_Parser, feed)
@@ -117,6 +238,24 @@ PHP_METHOD(Resp3_Parser, feed)
 	resp3_parser_feed(&intern->parser, bytes, bytes_len);
 }
 
+/* Run the state machine unless a reply is already waiting. Returns the step
+ * result; on RESP3_PARSE_ERROR a PROTOCOL exception has been thrown. A latched
+ * parser error is reported by resp3_parser_step itself until reset(). */
+static resp3_parse_result_t resp3_drive(resp3_parser_t *p)
+{
+	if (Z_TYPE(p->completed) != IS_UNDEF) {
+		return RESP3_PARSE_COMPLETE;
+	}
+
+	char err[128] = {0};
+	resp3_parse_result_t rc = resp3_parser_step(p, err, sizeof(err));
+
+	if (rc == RESP3_PARSE_ERROR) {
+		resp3_throw_protocol_error(err);
+	}
+	return rc;
+}
+
 /* Drive the state machine until a complete message lands in p->completed,
  * an error is hit (throws), or the buffer runs out (returns false). */
 PHP_METHOD(Resp3_Parser, hasNext)
@@ -124,21 +263,11 @@ PHP_METHOD(Resp3_Parser, hasNext)
 	ZEND_PARSE_PARAMETERS_NONE();
 
 	resp3_parser_object *intern = Z_RESP3_PARSER_P(ZEND_THIS);
-	resp3_parser_t *p = &intern->parser;
-
-	if (Z_TYPE(p->completed) != IS_UNDEF) {
-		RETURN_TRUE;
-	}
-
-	char err[128] = {0};
-	resp3_parse_result_t rc = resp3_parser_step(p, err, sizeof(err));
+	resp3_parse_result_t rc = resp3_drive(&intern->parser);
 
 	if (rc == RESP3_PARSE_ERROR) {
-		zend_throw_exception_ex(resp3_redis_exception_ce, 0,
-			"RESP3 parse error: %s", err);
 		RETURN_THROWS();
 	}
-
 	RETURN_BOOL(rc == RESP3_PARSE_COMPLETE);
 }
 
@@ -148,93 +277,60 @@ PHP_METHOD(Resp3_Parser, next)
 
 	resp3_parser_object *intern = Z_RESP3_PARSER_P(ZEND_THIS);
 	resp3_parser_t *p = &intern->parser;
+	resp3_parse_result_t rc = resp3_drive(p);
 
-	/* If the caller didn't pre-check via hasNext(), drive the state machine ourselves. */
-	if (Z_TYPE(p->completed) == IS_UNDEF) {
-		char err[128] = {0};
-		resp3_parse_result_t rc = resp3_parser_step(p, err, sizeof(err));
-
-		if (rc == RESP3_PARSE_ERROR) {
-			zend_throw_exception_ex(resp3_redis_exception_ce, 0,
-				"RESP3 parse error: %s", err);
-			RETURN_THROWS();
-		}
-		if (rc == RESP3_PARSE_NEED_MORE) {
-			zend_throw_exception_ex(resp3_redis_exception_ce, 0,
-				"next() called with no complete message available; check hasNext() first");
-			RETURN_THROWS();
-		}
+	if (rc == RESP3_PARSE_ERROR) {
+		RETURN_THROWS();
+	}
+	if (rc == RESP3_PARSE_NEED_MORE) {
+		zend_throw_exception_ex(spl_ce_LogicException, 0,
+			"next() called with no complete message available; check hasNext() first");
+		RETURN_THROWS();
 	}
 
-	/* COMPLETE — hand the parsed value back to userland and clear the slot. */
+	/* COMPLETE: the parser already wrapped errors, verbatim strings and pushes
+	 * via resp3_wrap_reply(). Hand the value over and clear the slot. */
 	zval out;
 	ZVAL_COPY_VALUE(&out, &p->completed);
 	ZVAL_UNDEF(&p->completed);
-
-	/* For top-level error replies, wrap in Resp3\RedisException so userland can
-	 * distinguish errors from arbitrary strings. */
-	if (p->completed_type == '-' || p->completed_type == '!') {
-		zval ex;
-		object_init_ex(&ex, resp3_redis_exception_ce);
-		zend_update_property_string(resp3_redis_exception_ce, Z_OBJ(ex),
-			"message", sizeof("message") - 1,
-			Z_TYPE(out) == IS_STRING ? Z_STRVAL(out) : "");
-		zval_ptr_dtor(&out);
-		RETURN_COPY_VALUE(&ex);
-	}
-
-	/* Verbatim string: split "xxx:payload" into type + value and wrap.
-	 * The wire format is `=<len>\r\n<3-char prefix>:<payload>\r\n`. The type
-	 * prefix is server-supplied untrusted input; we only accept 3 ASCII alnum
-	 * chars. Anything else falls back to type="" with the full payload in value
-	 * so consumers can still see the bytes without taking unsafe input as a tag. */
-	if (p->completed_type == '=' && Z_TYPE(out) == IS_STRING) {
-		zend_string *s = Z_STR(out);
-		const char *raw = ZSTR_VAL(s);
-		size_t      len = ZSTR_LEN(s);
-
-		bool valid_prefix = (len >= 4 && raw[3] == ':');
-		if (valid_prefix) {
-			for (int i = 0; i < 3; i++) {
-				unsigned char c = (unsigned char) raw[i];
-				if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))) {
-					valid_prefix = false;
-					break;
-				}
-			}
-		}
-
-		zend_string *type_s = valid_prefix
-			? zend_string_init(raw, 3, 0)
-			: zend_string_init("", 0, 0);
-		zend_string *value_s = valid_prefix
-			? zend_string_init(raw + 4, len - 4, 0)
-			: zend_string_copy(s);
-
-		zval vs;
-		object_init_ex(&vs, resp3_verbatim_string_ce);
-		zend_update_property_str(resp3_verbatim_string_ce, Z_OBJ(vs),
-			"type", sizeof("type") - 1, type_s);
-		zend_update_property_str(resp3_verbatim_string_ce, Z_OBJ(vs),
-			"value", sizeof("value") - 1, value_s);
-
-		zend_string_release(type_s);
-		zend_string_release(value_s);
-		zval_ptr_dtor(&out);
-		RETURN_COPY_VALUE(&vs);
-	}
-
-	/* Push: wrap the array payload so consumers can route on instanceof. */
-	if (p->completed_type == '>' && Z_TYPE(out) == IS_ARRAY) {
-		zval pm;
-		object_init_ex(&pm, resp3_push_message_ce);
-		zend_update_property(resp3_push_message_ce, Z_OBJ(pm),
-			"payload", sizeof("payload") - 1, &out);
-		zval_ptr_dtor(&out);
-		RETURN_COPY_VALUE(&pm);
-	}
-
 	RETURN_COPY_VALUE(&out);
+}
+
+/* Queue mode: report whether a push is waiting. Drives the state machine first
+ * so a push buffered ahead of (or without) a regular reply is found. */
+PHP_METHOD(Resp3_Parser, hasPush)
+{
+	ZEND_PARSE_PARAMETERS_NONE();
+
+	resp3_parser_object *intern = Z_RESP3_PARSER_P(ZEND_THIS);
+	resp3_parser_t *p = &intern->parser;
+
+	if (resp3_parser_has_push(p)) {
+		RETURN_TRUE;
+	}
+	if (resp3_drive(p) == RESP3_PARSE_ERROR) {
+		RETURN_THROWS();
+	}
+	RETURN_BOOL(resp3_parser_has_push(p));
+}
+
+PHP_METHOD(Resp3_Parser, nextPush)
+{
+	ZEND_PARSE_PARAMETERS_NONE();
+
+	resp3_parser_object *intern = Z_RESP3_PARSER_P(ZEND_THIS);
+	resp3_parser_t *p = &intern->parser;
+
+	if (!resp3_parser_has_push(p)) {
+		if (resp3_drive(p) == RESP3_PARSE_ERROR) {
+			RETURN_THROWS();
+		}
+		if (!resp3_parser_has_push(p)) {
+			RETURN_NULL();
+		}
+	}
+
+	resp3_parser_shift_push(p, return_value);
 }
 
 PHP_METHOD(Resp3_Parser, reset)

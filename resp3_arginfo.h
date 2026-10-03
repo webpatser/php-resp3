@@ -1,5 +1,5 @@
 /* This is a generated file, edit the .stub.php file instead.
- * Stub hash: 4b33cc9490b9ebcdb5f7eb3364a29d627dc70afc */
+ * Stub hash: bad4451f40747d71aa1953e86e36c964db9a2191 */
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_resp3_version, 0, 0, IS_STRING, 0)
 ZEND_END_ARG_INFO()
@@ -8,6 +8,7 @@ ZEND_BEGIN_ARG_INFO_EX(arginfo_class_Resp3_Parser___construct, 0, 0, 0)
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, maxDepth, IS_LONG, 0, "100")
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, maxBulk, IS_LONG, 0, "536870912")
 	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, maxAggregateCount, IS_LONG, 0, "1000000")
+	ZEND_ARG_TYPE_INFO_WITH_DEFAULT_VALUE(0, queuePushes, _IS_BOOL, 0, "false")
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_Resp3_Parser_feed, 0, 1, IS_VOID, 0)
@@ -18,6 +19,11 @@ ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_Resp3_Parser_hasNext, 0, 0
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_Resp3_Parser_next, 0, 0, IS_MIXED, 0)
+ZEND_END_ARG_INFO()
+
+#define arginfo_class_Resp3_Parser_hasPush arginfo_class_Resp3_Parser_hasNext
+
+ZEND_BEGIN_ARG_WITH_RETURN_OBJ_INFO_EX(arginfo_class_Resp3_Parser_nextPush, 0, 0, Resp3\\PushMessage, 1)
 ZEND_END_ARG_INFO()
 
 ZEND_BEGIN_ARG_WITH_RETURN_TYPE_INFO_EX(arginfo_class_Resp3_Parser_reset, 0, 0, IS_VOID, 0)
@@ -40,6 +46,8 @@ ZEND_METHOD(Resp3_Parser, __construct);
 ZEND_METHOD(Resp3_Parser, feed);
 ZEND_METHOD(Resp3_Parser, hasNext);
 ZEND_METHOD(Resp3_Parser, next);
+ZEND_METHOD(Resp3_Parser, hasPush);
+ZEND_METHOD(Resp3_Parser, nextPush);
 ZEND_METHOD(Resp3_Parser, reset);
 ZEND_METHOD(Resp3_Parser, lastAttributes);
 ZEND_METHOD(Resp3_VerbatimString, __construct);
@@ -55,6 +63,8 @@ static const zend_function_entry class_Resp3_Parser_methods[] = {
 	ZEND_ME(Resp3_Parser, feed, arginfo_class_Resp3_Parser_feed, ZEND_ACC_PUBLIC)
 	ZEND_ME(Resp3_Parser, hasNext, arginfo_class_Resp3_Parser_hasNext, ZEND_ACC_PUBLIC)
 	ZEND_ME(Resp3_Parser, next, arginfo_class_Resp3_Parser_next, ZEND_ACC_PUBLIC)
+	ZEND_ME(Resp3_Parser, hasPush, arginfo_class_Resp3_Parser_hasPush, ZEND_ACC_PUBLIC)
+	ZEND_ME(Resp3_Parser, nextPush, arginfo_class_Resp3_Parser_nextPush, ZEND_ACC_PUBLIC)
 	ZEND_ME(Resp3_Parser, reset, arginfo_class_Resp3_Parser_reset, ZEND_ACC_PUBLIC)
 	ZEND_ME(Resp3_Parser, lastAttributes, arginfo_class_Resp3_Parser_lastAttributes, ZEND_ACC_PUBLIC)
 	ZEND_FE_END
@@ -75,7 +85,7 @@ static zend_class_entry *register_class_Resp3_Parser(void)
 	zend_class_entry ce, *class_entry;
 
 	INIT_NS_CLASS_ENTRY(ce, "Resp3", "Parser", class_Resp3_Parser_methods);
-	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL);
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL|ZEND_ACC_NOT_SERIALIZABLE);
 
 	return class_entry;
 }
@@ -87,6 +97,12 @@ static zend_class_entry *register_class_Resp3_RedisException(zend_class_entry *c
 	INIT_NS_CLASS_ENTRY(ce, "Resp3", "RedisException", NULL);
 	class_entry = zend_register_internal_class_with_flags(&ce, class_entry_RuntimeException, 0);
 
+	zval property_prefix_default_value;
+	ZVAL_EMPTY_STRING(&property_prefix_default_value);
+	zend_string *property_prefix_name = zend_string_init("prefix", sizeof("prefix") - 1, 1);
+	zend_declare_typed_property(class_entry, property_prefix_name, &property_prefix_default_value, ZEND_ACC_PUBLIC, NULL, (zend_type) ZEND_TYPE_INIT_MASK(MAY_BE_STRING));
+	zend_string_release(property_prefix_name);
+
 	return class_entry;
 }
 
@@ -95,7 +111,7 @@ static zend_class_entry *register_class_Resp3_VerbatimString(void)
 	zend_class_entry ce, *class_entry;
 
 	INIT_NS_CLASS_ENTRY(ce, "Resp3", "VerbatimString", class_Resp3_VerbatimString_methods);
-	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL);
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL|ZEND_ACC_NO_DYNAMIC_PROPERTIES);
 
 	zval property_type_default_value;
 	ZVAL_UNDEF(&property_type_default_value);
@@ -113,7 +129,7 @@ static zend_class_entry *register_class_Resp3_PushMessage(void)
 	zend_class_entry ce, *class_entry;
 
 	INIT_NS_CLASS_ENTRY(ce, "Resp3", "PushMessage", class_Resp3_PushMessage_methods);
-	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL);
+	class_entry = zend_register_internal_class_with_flags(&ce, NULL, ZEND_ACC_FINAL|ZEND_ACC_NO_DYNAMIC_PROPERTIES);
 
 	zval property_payload_default_value;
 	ZVAL_UNDEF(&property_payload_default_value);

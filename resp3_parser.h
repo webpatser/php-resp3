@@ -1,6 +1,6 @@
 /*
   +----------------------------------------------------------------------+
-  | php-resp3 — RESP3 wire-protocol parser                               |
+  | php-resp3: RESP3 wire-protocol parser                               |
   +----------------------------------------------------------------------+
   | Author: Christoph Kempen <christoph@downsized.nl>                    |
   +----------------------------------------------------------------------+
@@ -32,7 +32,8 @@
 
 typedef enum {
 	RESP3_S_TYPE,        /* expect type byte */
-	RESP3_S_LEN,         /* reading length digits (for $, *, %, ~, =, !, >, |) */
+	RESP3_S_LEN,         /* reading length digits (for $, *, %, ~, =, !, >, |); no leading
+	                      * zeros, no -0; only $-1 and *-1 are accepted as negative (null) */
 	RESP3_S_LEN_LF,      /* expect \n after \r in length line */
 	RESP3_S_BULK_DATA,   /* reading N bytes of bulk payload */
 	RESP3_S_BULK_CR,     /* expect \r after bulk payload */
@@ -47,7 +48,7 @@ typedef struct {
 	int64_t count;            /* remaining children */
 	zval    accum;            /* accumulator (PHP array being filled) */
 	int     map_key_pending;  /* 1 if next child is a map key, 0 if value */
-	zend_string *pending_key; /* held key for map until value parsed */
+	zval    pending_key;      /* held map key (IS_STRING or IS_LONG) until the value is parsed; IS_UNDEF when none */
 } resp3_frame_t;
 
 /* Hard caps to keep adversarial wire input from causing OOM or integer overflow.
@@ -56,6 +57,16 @@ typedef struct {
 #define RESP3_DEFAULT_MAX_COUNT  ((int64_t) 1000000)               /* 1M elements per aggregate */
 #define RESP3_HARD_DIGIT_LIMIT   19                                /* int64_t max decimal digits */
 #define RESP3_MAX_INLINE_LINE    65536                             /* cap on +/-/:/,/#/(/_ payload */
+/* Upper bound on the hash-table size hint taken from an aggregate header. The
+ * declared count is unverified wire input: honouring it up front lets a 15-byte
+ * frame such as "*1000000\r\n:1\r\n" pin megabytes per frame. Beyond this hint
+ * the table grows by doubling as children actually arrive. */
+#define RESP3_PREALLOC_HINT_CAP  1024
+/* Hint cap for nested frames (depth > 0). Every nesting level allocates its own
+ * table up front, so "*1000\r\n" repeated down to max_depth would multiply the
+ * top-level cap by the depth before a single leaf arrives. Nested frames get a
+ * small hint and grow on demand. */
+#define RESP3_PREALLOC_HINT_CAP_NESTED 64
 
 typedef struct {
 	smart_str        buf;          /* rolling input buffer */
@@ -77,19 +88,42 @@ typedef struct {
 	zval             attributes;   /* last-seen attribute payload (IS_NULL if none) */
 	zval             completed;    /* completed top-level message (IS_UNDEF until ready) */
 	char             completed_type; /* type byte of the last top-level completion */
+	int              errored;      /* latched after any RESP3_PARSE_ERROR; only reset() clears it */
+	int              attr_fresh;   /* 1 if a top-level attribute was parsed and the message it
+	                                * annotates has not started yet */
+	int              queue_pushes; /* 1: top-level '>' frames go to push_queue, not completed */
+	zval             push_queue;   /* Resp3\PushMessage objects keyed 0..n-1 in arrival order
+	                                * (IS_UNDEF until the first push). Holds at most max_count
+	                                * undrained entries; one more is the protocol error
+	                                * "push queue limit exceeded; drain with nextPush()". */
+	uint32_t         push_head;    /* index of the oldest undrained entry in push_queue; the
+	                                * table is cleaned and this reset to 0 once it drains */
 } resp3_parser_t;
 
 /* Parse result codes returned by resp3_parser_step. */
 typedef enum {
-	RESP3_PARSE_NEED_MORE = 0,  /* not enough bytes — call feed() and retry */
+	RESP3_PARSE_NEED_MORE = 0,  /* not enough bytes; call feed() and retry */
 	RESP3_PARSE_COMPLETE  = 1,  /* a complete message landed in p->completed */
 	RESP3_PARSE_ERROR     = -1  /* protocol violation */
 } resp3_parse_result_t;
 
-void resp3_parser_init(resp3_parser_t *p, size_t max_depth, int64_t max_bulk, int64_t max_count);
+/* Reply wrapping (resp3_wrap_reply) is declared in php_resp3.h and implemented in resp3.c. */
+
+/* queue_pushes: when non-zero, completed top-level push frames are appended to
+ * p->push_queue and parsing continues, so step() never reports them as a reply. */
+void resp3_parser_init(resp3_parser_t *p, size_t max_depth, int64_t max_bulk, int64_t max_count, int queue_pushes);
 void resp3_parser_dtor(resp3_parser_t *p);
+/* Discards all buffered input, partial state, queued pushes and the error latch.
+ * Caps and the queue_pushes mode survive. */
 void resp3_parser_reset(resp3_parser_t *p);
 void resp3_parser_feed(resp3_parser_t *p, const char *bytes, size_t len);
+/* After it returns RESP3_PARSE_ERROR once, every further call returns
+ * RESP3_PARSE_ERROR ("parser is in error state; call reset()") until reset(). */
 resp3_parse_result_t resp3_parser_step(resp3_parser_t *p, char *err, size_t err_len);
+/* 1 if at least one push message is queued (queue_pushes mode only). */
+int resp3_parser_has_push(resp3_parser_t *p);
+/* Moves the oldest queued push message into *out (caller owns the reference)
+ * and removes it from the queue. *out is set to null when the queue is empty. */
+void resp3_parser_shift_push(resp3_parser_t *p, zval *out);
 
 #endif /* RESP3_PARSER_H */
