@@ -5,7 +5,7 @@ resp3
 --FILE--
 <?php
 $p = new Resp3\Parser();
-// =5 + "\x00\x00\x00:x" — three NUL bytes as the prefix, then ':' separator
+// =5 + "\x00\x00\x00:x": three NUL bytes as the prefix, then ':' separator
 $p->feed("=5\r\n\x00\x00\x00:x\r\n");
 $v = $p->next();
 var_dump($v instanceof Resp3\VerbatimString);

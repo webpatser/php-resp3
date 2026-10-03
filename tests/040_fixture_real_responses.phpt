@@ -5,7 +5,7 @@ resp3
 --SKIPIF--
 <?php
 if (!is_dir(__DIR__ . '/fixtures/02_resp3')) {
-    echo "skip fixtures/02_resp3 not present — run tools/capture_fixtures.php\n";
+    echo "skip fixtures/02_resp3 not present, run tools/capture_fixtures.php\n";
 }
 ?>
 --FILE--

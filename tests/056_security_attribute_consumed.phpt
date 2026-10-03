@@ -1,5 +1,5 @@
 --TEST--
-Security: lastAttributes() is one-shot — second read returns null
+Security: lastAttributes() is one-shot, second read returns null
 --EXTENSIONS--
 resp3
 --FILE--

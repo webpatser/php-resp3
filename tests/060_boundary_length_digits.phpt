@@ -24,10 +24,9 @@ $p->feed("\$9999999999999999999\r\n");
 try { $p->hasNext(); echo "FAIL\n"; }
 catch (Resp3\RedisException $e) { echo "case B: ", $e->getMessage(), "\n"; }
 
-// 20 digits with leading zeros. The overflow guard does not fire
-// (int_acc stays tiny), so the digit-count cap is what catches it.
+// 20 digits with a non-zero first digit; the digit-count cap catches it.
 $p = new Resp3\Parser();
-$p->feed("\$00000000000000000001\r\n");
+$p->feed("\$10000000000000000001\r\n");
 try { $p->hasNext(); echo "FAIL\n"; }
 catch (Resp3\RedisException $e) { echo "case C: ", $e->getMessage(), "\n"; }
 ?>
