@@ -141,9 +141,41 @@ jobs:
           NO_INTERACTION: "1"
           REPORT_EXIT_STATUS: "1"
 
-  # PIE install smoke test deferred to a post-publish workflow.
-  # Path-repository install on a detached-HEAD CI checkout has known
-  # version-resolution edge cases (composer reports 9999999-dev, the
-  # cli constraint cannot satisfy that cleanly). The proper smoke test
-  # is `pie install webpatser/php-resp3` against Packagist after the
-  # tag is published, which planned for v0.1.1.
+  asan:
+    name: ASan + UBSan (PHP 8.5 on ubuntu-24.04)
+    runs-on: ubuntu-24.04
+    env:
+      NO_INTERACTION: "1"
+      REPORT_EXIT_STATUS: "1"
+      ASAN_OPTIONS: detect_leaks=0:halt_on_error=1
+      UBSAN_OPTIONS: print_stacktrace=1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP 8.5
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          tools: phpize
+          coverage: none
+
+      - name: phpize + configure + make (sanitizers on)
+        run: |
+          phpize
+          CFLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -g" \
+            LDFLAGS="-fsanitize=address,undefined" \
+            ./configure --enable-resp3
+          make
+
+      - name: create sanitizer PHP wrapper
+        run: |
+          mkdir -p .ci
+          cat > .ci/php-asan <<EOF
+          #!/bin/sh
+          exec env LD_PRELOAD=$(gcc -print-file-name=libasan.so) ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=print_stacktrace=1 $(command -v php) "\$@"
+          EOF
+          chmod +x .ci/php-asan
+          cat .ci/php-asan
+
+      - name: make test under ASan + UBSan
+        run: make test PHP_EXECUTABLE="$PWD/.ci/php-asan" TESTS="--show-diff tests/"
