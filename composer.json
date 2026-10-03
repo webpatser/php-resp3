@@ -21,6 +21,10 @@
         "amphp/redis": "^2.0",
         "amphp/amp": "^3.0"
     },
+    "suggest": {
+        "amphp/redis": "Redis client the Resp3\\Adapter classes plug into",
+        "amphp/amp": "Async runtime required by the amphp/redis adapter"
+    },
     "autoload": {
         "psr-4": {
             "Resp3\\Adapter\\": "src/Adapter/"
@@ -31,8 +35,6 @@
             "Resp3\\Bench\\": "bench/src/"
         }
     },
-    "minimum-stability": "dev",
-    "prefer-stable": true,
     "config": {
         "sort-packages": true
     },
