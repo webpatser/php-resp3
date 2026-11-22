@@ -5,6 +5,16 @@ All notable changes to this project go here. Format follows
 once the project hits 1.0; until then, breaking changes can land in any 0.x
 minor and are called out in the entry.
 
+## [0.3.0] - 2026-11-22
+
+### Changed
+
+- **Breaking:** requires PHP 8.6; PHP 8.4 and 8.5 are no longer supported.
+  Users on PHP 8.4 or 8.5 stay on 0.2.x.
+- The extension refuses to build below PHP 8.6 (compile-time guard in
+  `php_resp3.h`).
+- CI and the prebuilt release binaries cover PHP 8.6 only.
+
 ## [0.2.1] - 2026-11-22
 
 ### Fixed

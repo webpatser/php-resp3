@@ -14,7 +14,11 @@ extern zend_module_entry resp3_module_entry;
 
 #include "php.h"
 
-#define PHP_RESP3_VERSION "0.2.1"
+#if PHP_VERSION_ID < 80600
+# error "resp3 requires PHP 8.6 or newer; stay on php-resp3 0.2.x for PHP 8.4 and 8.5"
+#endif
+
+#define PHP_RESP3_VERSION "0.3.0"
 
 /* Default nesting cap and the hard ceiling for Resp3\Parser's maxDepth.
  * Destroying a reply nested much deeper than the ceiling recurses far enough

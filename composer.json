@@ -15,7 +15,7 @@
         "download-url-method": ["pre-packaged-binary", "composer-default"]
     },
     "require": {
-        "php": "^8.4"
+        "php": "^8.6"
     },
     "require-dev": {
         "amphp/redis": "^2.0",
