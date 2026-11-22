@@ -209,25 +209,25 @@ php -d extension=./modules/resp3.so -r 'echo resp3_version();'
 
 ### Prebuilt binaries (instant `pie install`)
 
-| Combo                       | PHP versions |
-| :-------------------------- | :----------- |
+| Combo                       | PHP versions  |
+| :-------------------------- | :------------ |
 | linux / x86_64 / glibc, NTS | 8.4, 8.5, 8.6 |
 | linux / arm64  / glibc, NTS | 8.4, 8.5, 8.6 |
 | darwin / arm64, NTS         | 8.4, 8.5, 8.6 |
 
 `pie install webpatser/php-resp3` downloads the right `.zip` from the
-GitHub Release for your PHP build; no compile needed for these six combos.
+GitHub Release for your PHP build; no compile needed for these nine combos.
 
 ### Source compile (PIE fallback)
 
 For any combo without a prebuilt asset, PIE falls back to a local source
 compile. CI verifies the build path on:
 
-| Build               | x64 | ARM64 | PHP versions |
-| :------------------ | :-: | :---: | :----------- |
+| Build               | x64 | ARM64 | PHP versions  |
+| :------------------ | :-: | :---: | :------------ |
 | Ubuntu 24.04 (NTS)  |  ✓  |   ✓   | 8.4, 8.5, 8.6 |
 | macOS 15 (NTS)      | n/a |   ✓   | 8.4, 8.5, 8.6 |
-| Alpine 3.22 (musl)  |  ✓  |  n/a  | 8.4          |
+| Alpine 3.22 (musl)  |  ✓  |  n/a  | 8.4           |
 | Ubuntu 24.04 (ZTS)  |  ✓  |  n/a  | 8.4, 8.5, 8.6 |
 
 That works out to 9 build combinations plus a Valgrind memcheck run, all
