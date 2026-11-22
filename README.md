@@ -20,7 +20,7 @@ management. You feed it bytes, you pull out parsed messages.
 pie install webpatser/php-resp3
 ```
 
-PIE downloads a prebuilt `.so` for your PHP build (PHP 8.4 or 8.5 on linux x86_64,
+PIE downloads a prebuilt `.so` for your PHP build (PHP 8.4, 8.5 or 8.6 on linux x86_64,
 linux arm64, or macOS arm64) in seconds. For other combos PIE falls back to a
 local source compile, which needs a C compiler, php-dev, and `re2c`. See
 [Build from source](#build-from-source) and [Supported platforms](#supported-platforms).
@@ -185,7 +185,7 @@ Only `$-1` and `*-1` are null lengths (RESP2 compatibility). `~-1`, `>-1`,
 
 ## Requirements
 
-- PHP 8.4 or 8.5
+- PHP 8.4, 8.5 or 8.6
 - A C compiler (clang on macOS, gcc on Linux)
 
 ## Build from source
@@ -211,9 +211,9 @@ php -d extension=./modules/resp3.so -r 'echo resp3_version();'
 
 | Combo                       | PHP versions |
 | :-------------------------- | :----------- |
-| linux / x86_64 / glibc, NTS | 8.4, 8.5     |
-| linux / arm64  / glibc, NTS | 8.4, 8.5     |
-| darwin / arm64, NTS         | 8.4, 8.5     |
+| linux / x86_64 / glibc, NTS | 8.4, 8.5, 8.6 |
+| linux / arm64  / glibc, NTS | 8.4, 8.5, 8.6 |
+| darwin / arm64, NTS         | 8.4, 8.5, 8.6 |
 
 `pie install webpatser/php-resp3` downloads the right `.zip` from the
 GitHub Release for your PHP build; no compile needed for these six combos.
@@ -225,10 +225,10 @@ compile. CI verifies the build path on:
 
 | Build               | x64 | ARM64 | PHP versions |
 | :------------------ | :-: | :---: | :----------- |
-| Ubuntu 24.04 (NTS)  |  ✓  |   ✓   | 8.4, 8.5     |
-| macOS 15 (NTS)      | n/a |   ✓   | 8.4, 8.5     |
+| Ubuntu 24.04 (NTS)  |  ✓  |   ✓   | 8.4, 8.5, 8.6 |
+| macOS 15 (NTS)      | n/a |   ✓   | 8.4, 8.5, 8.6 |
 | Alpine 3.22 (musl)  |  ✓  |  n/a  | 8.4          |
-| Ubuntu 24.04 (ZTS)  |  ✓  |  n/a  | 8.4, 8.5     |
+| Ubuntu 24.04 (ZTS)  |  ✓  |  n/a  | 8.4, 8.5, 8.6 |
 
 That works out to 9 build combinations plus a Valgrind memcheck run, all
 in parallel on GitHub Actions. PHP 8.6 lands when it goes GA.
