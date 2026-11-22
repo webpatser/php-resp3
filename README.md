@@ -20,8 +20,8 @@ management. You feed it bytes, you pull out parsed messages.
 pie install webpatser/php-resp3
 ```
 
-PIE downloads a prebuilt `.so` for your PHP build (PHP 8.4, 8.5 or 8.6 on linux x86_64,
-linux arm64, or macOS arm64) in seconds. For other combos PIE falls back to a
+PIE downloads a prebuilt `.so` for your PHP build (PHP 8.6 on linux x86_64, linux arm64,
+or macOS arm64) in seconds. For other combos PIE falls back to a
 local source compile, which needs a C compiler, php-dev, and `re2c`. See
 [Build from source](#build-from-source) and [Supported platforms](#supported-platforms).
 
@@ -185,8 +185,14 @@ Only `$-1` and `*-1` are null lengths (RESP2 compatibility). `~-1`, `>-1`,
 
 ## Requirements
 
-- PHP 8.4, 8.5 or 8.6
+- PHP 8.6
 - A C compiler (clang on macOS, gcc on Linux)
+
+## PHP version policy
+
+This extension supports only the latest stable PHP release. When a new PHP version is released, the next release of this extension requires it and support for the previous PHP version ends. Currently: PHP 8.6.
+
+On PHP 8.4 or 8.5, stay on php-resp3 0.2.x.
 
 ## Build from source
 
@@ -209,29 +215,29 @@ php -d extension=./modules/resp3.so -r 'echo resp3_version();'
 
 ### Prebuilt binaries (instant `pie install`)
 
-| Combo                       | PHP versions  |
-| :-------------------------- | :------------ |
-| linux / x86_64 / glibc, NTS | 8.4, 8.5, 8.6 |
-| linux / arm64  / glibc, NTS | 8.4, 8.5, 8.6 |
-| darwin / arm64, NTS         | 8.4, 8.5, 8.6 |
+| Combo                       | PHP versions |
+| :-------------------------- | :----------- |
+| linux / x86_64 / glibc, NTS | 8.6          |
+| linux / arm64  / glibc, NTS | 8.6          |
+| darwin / arm64, NTS         | 8.6          |
 
 `pie install webpatser/php-resp3` downloads the right `.zip` from the
-GitHub Release for your PHP build; no compile needed for these nine combos.
+GitHub Release for your PHP build; no compile needed for these three combos.
 
 ### Source compile (PIE fallback)
 
 For any combo without a prebuilt asset, PIE falls back to a local source
 compile. CI verifies the build path on:
 
-| Build               | x64 | ARM64 | PHP versions  |
-| :------------------ | :-: | :---: | :------------ |
-| Ubuntu 24.04 (NTS)  |  ✓  |   ✓   | 8.4, 8.5, 8.6 |
-| macOS 15 (NTS)      | n/a |   ✓   | 8.4, 8.5, 8.6 |
-| Alpine 3.22 (musl)  |  ✓  |  n/a  | 8.4           |
-| Ubuntu 24.04 (ZTS)  |  ✓  |  n/a  | 8.4, 8.5, 8.6 |
+| Build               | x64 | ARM64 | PHP versions |
+| :------------------ | :-: | :---: | :----------- |
+| Ubuntu 24.04 (NTS)  |  ✓  |   ✓   | 8.6          |
+| macOS 15 (NTS)      | n/a |   ✓   | 8.6          |
+| Alpine (musl)       |  ✓  |  n/a  | 8.6          |
+| Ubuntu 24.04 (ZTS)  |  ✓  |  n/a  | 8.6          |
 
-That works out to 9 build combinations plus a Valgrind memcheck run, all
-in parallel on GitHub Actions. PHP 8.6 lands when it goes GA.
+That works out to 5 build combinations plus a Valgrind memcheck run and an
+ASan + UBSan run, all in parallel on GitHub Actions.
 
 ## Test fixtures
 

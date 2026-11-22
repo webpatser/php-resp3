@@ -213,8 +213,8 @@ PHP object) and `clone_obj = NULL` (parsers carry mid-message state
 that does not clone meaningfully).
 
 Arginfo is generated from `resp3.stub.php` via PHP's `gen_stub.php`
-with `--minimum-php-version=8.4`. The generator uses
-`zend_register_internal_class_with_flags()` directly; PHP 8.4 is the
+with `--minimum-php-version=8.6`. The generator uses
+`zend_register_internal_class_with_flags()` directly; PHP 8.6 is the
 project minimum so the older 8.3 helper is not required.
 
 ## Design notes
@@ -296,11 +296,11 @@ action on each tag-pushed release.
 
 | OS     | Arch    | Libc    | TSMode | PHP versions |
 | :----- | :------ | :------ | :----- | :----------- |
-| linux  | x86_64  | glibc   | nts    | 8.4, 8.5     |
-| linux  | arm64   | glibc   | nts    | 8.4, 8.5     |
-| darwin | arm64   | bsdlibc | nts    | 8.4, 8.5     |
+| linux  | x86_64  | glibc   | nts    | 8.6          |
+| linux  | arm64   | glibc   | nts    | 8.6          |
+| darwin | arm64   | bsdlibc | nts    | 8.6          |
 
-Six assets per release. ZTS builds, Alpine/musl, x86 (32-bit), and Windows
+Three assets per release. ZTS builds, Alpine/musl, x86 (32-bit), and Windows
 DLLs are not prebuilt; PIE compiles those from source on the user's host.
 
 ### Why this matrix

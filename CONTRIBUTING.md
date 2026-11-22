@@ -6,7 +6,7 @@ every interaction here.
 
 ## Local setup
 
-You need PHP 8.4 or 8.5 installed with the development headers and a
+You need PHP 8.6 installed with the development headers and a
 C compiler (clang on macOS, gcc on Linux).
 
 ```bash
@@ -54,7 +54,7 @@ If you add a method, a property, or a constructor argument:
 
    ```bash
    php /path/to/php-source/build/gen_stub.php \
-     --minimum-php-version=8.4 resp3.stub.php
+     --minimum-php-version=8.6 resp3.stub.php
    ```
 
    On macOS Homebrew, the path is
@@ -62,7 +62,7 @@ If you add a method, a property, or a constructor argument:
 
 3. Implement or update the C method bodies in `resp3.c`.
 
-PHP 8.4 is the project minimum, so the generated arginfo can use
+PHP 8.6 is the project minimum, so the generated arginfo can use
 `zend_register_internal_class_with_flags()` directly. No hand tweak
 needed.
 
