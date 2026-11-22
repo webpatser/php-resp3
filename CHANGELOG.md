@@ -5,6 +5,12 @@ All notable changes to this project go here. Format follows
 once the project hits 1.0; until then, breaking changes can land in any 0.x
 minor and are called out in the entry.
 
+## [0.2.1] - 2026-11-22
+
+### Fixed
+
+- Build on PHP 8.6 (the XtOffsetOf macro was removed).
+
 ## [0.2.0] - 2026-10-03
 
 ### Added

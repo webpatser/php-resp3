@@ -14,7 +14,7 @@ extern zend_module_entry resp3_module_entry;
 
 #include "php.h"
 
-#define PHP_RESP3_VERSION "0.2.0"
+#define PHP_RESP3_VERSION "0.2.1"
 
 /* Default nesting cap and the hard ceiling for Resp3\Parser's maxDepth.
  * Destroying a reply nested much deeper than the ceiling recurses far enough

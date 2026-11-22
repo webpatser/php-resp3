@@ -32,7 +32,7 @@ typedef struct {
 
 static inline resp3_parser_object *resp3_parser_from_obj(zend_object *obj)
 {
-	return (resp3_parser_object *)((char *)obj - XtOffsetOf(resp3_parser_object, std));
+	return (resp3_parser_object *)((char *)obj - offsetof(resp3_parser_object, std));
 }
 
 #define Z_RESP3_PARSER_P(zv) resp3_parser_from_obj(Z_OBJ_P(zv))
@@ -394,7 +394,7 @@ PHP_MINIT_FUNCTION(resp3)
 	resp3_parser_ce->default_object_handlers = &resp3_parser_object_handlers;
 
 	memcpy(&resp3_parser_object_handlers, &std_object_handlers, sizeof(zend_object_handlers));
-	resp3_parser_object_handlers.offset = XtOffsetOf(resp3_parser_object, std);
+	resp3_parser_object_handlers.offset = offsetof(resp3_parser_object, std);
 	resp3_parser_object_handlers.free_obj = resp3_parser_free;
 	resp3_parser_object_handlers.clone_obj = NULL;
 
